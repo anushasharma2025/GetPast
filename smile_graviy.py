@@ -7,7 +7,7 @@ import threading
 import time
 import numpy as np
 
-# --- Constants ---
+
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
 CATCHER_WIDTH = 100
@@ -16,28 +16,28 @@ OBJECT_SIZE = 30
 HIGH_SCORE_FILE = "highscore_catch_the_smile.txt"
 WEBCAM_VIEW_SIZE = (160, 120)
 
-# --- Colors ---
+
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 GREEN = (0, 255, 0)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
 
-# --- Game Modes ---
+
 MODE_NORMAL = "normal"
 MODE_TOP_DOWN = "top_down"
 MODE_SIDE_TO_SIDE = "side_to_side"
 
-# --- Global variables for emotion detection ---
+
 current_emotion = "neutral"
 webcam_frame = None
 stop_thread = False
 emotion_timer = 0
-EMOTION_INTERVAL = 30 # Frames to wait between emotion checks
+EMOTION_INTERVAL = 30 
 happy_start_time = None
 game_mode = MODE_NORMAL
 
-# --- Emotion Analysis Thread ---
+
 def emotion_analysis_thread(cap):
     """
     Analyzes webcam frames in a separate thread.
@@ -72,7 +72,7 @@ def emotion_analysis_thread(cap):
         
         time.sleep(0.25)
 
-# --- Catcher Class ---
+
 class Catcher(pygame.sprite.Sprite):
     def __init__(self, mode):
         super().__init__()
@@ -103,7 +103,7 @@ class Catcher(pygame.sprite.Sprite):
             if keys[pygame.K_DOWN] and self.rect.bottom < SCREEN_HEIGHT:
                 self.rect.y += self.speed
 
-        # Adjust catcher size based on emotion
+      
         global current_emotion
         if current_emotion == "happy":
             new_dim = 60
@@ -122,14 +122,14 @@ class Catcher(pygame.sprite.Sprite):
                 self.rect = self.image.get_rect(centerx=self.rect.centerx, bottom=self.rect.bottom)
 
 
-# --- Falling Object Class ---
+
 class FallingObject(pygame.sprite.Sprite):
     def __init__(self, obj_type, mode, speed):
         super().__init__()
         self.obj_type = obj_type
         self.mode = mode
         self.image = pygame.Surface([OBJECT_SIZE, OBJECT_SIZE], pygame.SRCALPHA)
-        self.image.fill((0, 0, 0, 0)) # Transparent background
+        self.image.fill((0, 0, 0, 0))
         
         if self.obj_type == "smile":
             color = GREEN
@@ -173,7 +173,7 @@ class FallingObject(pygame.sprite.Sprite):
             elif self.speed < 0 and self.rect.right < 0:
                 self.kill()
 
-# --- Utility and Screen Functions ---
+
 def draw_text(surface, text, size, x, y, color=WHITE):
     font = pygame.font.Font(pygame.font.match_font('arial'), size)
     text_surface = font.render(text, True, color)
@@ -193,7 +193,6 @@ def create_button(surface, rect, text, text_color, button_color, hover_color):
     return is_hovering and click[0] == 1
 
 def show_menu(screen):
-    """Displays the main menu."""
     title_font = pygame.font.Font(pygame.font.match_font('arial'), 64)
     title_surface = title_font.render("Catch the Smile", True, WHITE)
     title_rect = title_surface.get_rect(center=(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 4))
@@ -241,7 +240,6 @@ def show_game_over_screen(screen, score):
         if create_button(screen, exit_button, "Exit", WHITE, RED, (255, 105, 97)): pygame.quit(); sys.exit()
         pygame.display.flip()
 
-# --- Main Game Loop ---
 def game_loop(screen, clock):
     global game_mode
     all_sprites = pygame.sprite.Group()
@@ -262,8 +260,7 @@ def game_loop(screen, clock):
         for event in pygame.event.get():
             if event.type == pygame.QUIT: running = False
 
-        # --- Dynamic Difficulty Logic ---
-        # Check if the special mode timer has expired
+       
         if game_mode != MODE_NORMAL and time.time() - mode_change_time > mode_duration:
             game_mode = MODE_NORMAL
             all_sprites.empty()
@@ -273,19 +270,17 @@ def game_loop(screen, clock):
             mode_change_time = None
             mode_duration = 0
 
-        # Check for mode change condition only in normal mode
         if game_mode == MODE_NORMAL:
             if current_emotion == "happy":
                 if happy_start_time is None:
                     happy_start_time = time.time()
                 elif time.time() - happy_start_time > 2:
-                    # Randomly choose a new mode after 2 seconds of being happy
+                    
                     new_mode = random.choice([MODE_TOP_DOWN, MODE_SIDE_TO_SIDE])
                     game_mode = new_mode
                     mode_change_time = time.time()
                     mode_duration = random.uniform(5, 7)
                     
-                    # Reinitialize sprites for the new mode
                     all_sprites.empty()
                     falling_objects.empty()
                     player = Catcher(game_mode)
@@ -293,20 +288,18 @@ def game_loop(screen, clock):
             else:
                 happy_start_time = None
 
-        # Determine object spawn properties based on emotion and mode
         object_speed = random.randint(4, 8)
         obj_type_to_spawn = random.choices(["smile", "frown"], weights=[0.6, 0.4], k=1)[0]
         current_interval = EMOTION_INTERVAL
 
         if current_emotion == "happy" and game_mode == MODE_NORMAL:
-            # Increase difficulty in normal mode when happy
             object_speed = random.randint(8, 12)
             obj_type_to_spawn = random.choices(["smile", "frown"], weights=[0.2, 0.8], k=1)[0]
             current_interval = 15
         elif current_emotion in ["angry", "sad", "disgust", "fear"]:
             obj_type_to_spawn = random.choices(["smile", "frown"], weights=[0.1, 0.9], k=1)[0]
         
-        # Spawn objects based on the determined properties
+     
         global emotion_timer
         emotion_timer += 1
         
@@ -379,3 +372,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
