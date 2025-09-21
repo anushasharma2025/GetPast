@@ -1,0 +1,312 @@
+import pygame
+import random
+import sys
+import cv2
+from deepface import DeepFace
+import threading
+import time
+import numpy as np
+
+
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+PLAYER_WIDTH = 50
+PLAYER_HEIGHT = 50
+ENEMY_WIDTH = 50
+ENEMY_HEIGHT = 50
+HIGH_SCORE_FILE = "highscore.txt"
+WEBCAM_VIEW_SIZE = (160, 120)  
+
+
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+GRAY = (128, 128, 128)
+
+
+current_emotion = "neutral"
+webcam_frame = None
+stop_thread = False
+
+
+def emotion_analysis_thread(cap):
+    """
+    This function runs in a separate thread to analyze webcam frames
+    without freezing the main game loop.
+    """
+    global current_emotion, webcam_frame
+    
+    while not stop_thread:
+        ret, frame = cap.read()
+        if not ret:
+            time.sleep(0.1)
+            continue
+            
+        
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        try:
+            
+            analysis = DeepFace.analyze(
+                rgb_frame, 
+                actions=['emotion'], 
+                enforce_detection=True, 
+                detector_backend='opencv'
+            )
+            
+            if isinstance(analysis, list) and len(analysis) > 0:
+                current_emotion = analysis[0]['dominant_emotion']
+            else: 
+                 current_emotion = analysis['dominant_emotion']
+
+        except ValueError as e:
+            
+            current_emotion = "no face"
+        
+        
+        frame = cv2.flip(frame, 1)
+        frame_resized = cv2.resize(frame, WEBCAM_VIEW_SIZE)
+        webcam_frame = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+        
+        
+        time.sleep(0.25) 
+
+
+DIFFICULTY_LEVELS = [
+   
+    {'level': 0, 'enemy_min_speed': 4, 'enemy_max_speed': 7, 'spawn_rate': 32}, 
+    {'level': 1, 'enemy_min_speed': 5, 'enemy_max_speed': 9, 'spawn_rate': 28},
+    {'level': 2, 'enemy_min_speed': 6, 'enemy_max_speed': 11, 'spawn_rate': 24}, 
+    {'level': 3, 'enemy_min_speed': 7, 'enemy_max_speed': 13, 'spawn_rate': 20},
+    {'level': 4, 'enemy_min_speed': 8, 'enemy_max_speed': 16, 'spawn_rate': 16}, 
+MAX_DIFFICULTY_LEVEL = len(DIFFICULTY_LEVELS) - 1
+
+
+class Player(pygame.sprite.Sprite):
+    def __init__(self, speed):
+        super().__init__()
+        self.image = pygame.Surface([PLAYER_WIDTH, PLAYER_HEIGHT])
+        self.image.fill(BLUE)
+        self.rect = self.image.get_rect()
+        self.rect.x = (SCREEN_WIDTH - PLAYER_WIDTH) // 2
+        self.rect.y = SCREEN_HEIGHT - PLAYER_HEIGHT - 10
+        self.speed = speed
+
+    def update(self):
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT] and self.rect.left > 0:
+            self.rect.x -= self.speed
+        if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:
+            self.rect.x += self.speed
+
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, min_speed, max_speed):
+        super().__init__()
+        self.image = pygame.Surface([ENEMY_WIDTH, ENEMY_HEIGHT])
+        self.image.fill(RED)
+        self.rect = self.image.get_rect()
+        self.rect.x = random.randint(0, SCREEN_WIDTH - ENEMY_WIDTH)
+        self.rect.y = random.randint(-100, -ENEMY_HEIGHT)
+        self.speed = random.randint(min_speed, max_speed)
+
+    def update(self):
+        self.rect.y += self.speed
+        if self.rect.top > SCREEN_HEIGHT:
+            self.kill()
+
+
+def draw_text(surface, text, size, x, y, color=WHITE):
+    font = pygame.font.Font(pygame.font.match_font('arial'), size)
+    text_surface = font.render(text, True, color)
+    text_rect = text_surface.get_rect()
+    text_rect.midtop = (x, y)
+    surface.blit(text_surface, text_rect)
+
+def create_button(surface, rect, text, text_color, button_color, hover_color):
+    mouse_pos = pygame.mouse.get_pos()
+    click = pygame.mouse.get_pressed()
+    is_hovering = rect.collidepoint(mouse_pos)
+    if is_hovering:
+        pygame.draw.rect(surface, hover_color, rect, border_radius=10)
+    else:
+        pygame.draw.rect(surface, button_color, rect, border_radius=10)
+    draw_text(surface, text, 20, rect.centerx, rect.centery - 10, text_color)
+    return is_hovering and click[0] == 1
+
+def show_menu(screen):
+    """Displays the main menu."""
+    title_font = pygame.font.Font(pygame.font.match_font('arial'), 64)
+    title_surface = title_font.render("Falling Skies", True, WHITE)
+    title_rect = title_surface.get_rect(center=(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 4))
+    
+    start_button = pygame.Rect(SCREEN_WIDTH/2 - 100, 350, 200, 50)
+    
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        screen.fill(BLACK)
+        screen.blit(title_surface, title_rect)
+        draw_text(screen, "Dynamic Difficulty Edition", 22, SCREEN_WIDTH/2, SCREEN_HEIGHT / 3 + 20)
+        
+        if create_button(screen, start_button, "Start Game", BLACK, GREEN, (144, 238, 144)):
+            return
+
+        pygame.display.flip()
+
+def show_game_over_screen(screen, score, emotion_tracker):
+    try:
+        with open(HIGH_SCORE_FILE, 'r') as f: high_score = int(f.read())
+    except (IOError, ValueError): high_score = 0
+    new_high_score = score > high_score
+    if new_high_score:
+        high_score = score
+        with open(HIGH_SCORE_FILE, 'w') as f: f.write(str(score))
+    
+    
+    happy_count = emotion_tracker.get('happy', 0)
+    frustration_count = (emotion_tracker.get('angry', 0) + 
+                         emotion_tracker.get('sad', 0) + 
+                         emotion_tracker.get('fear', 0) + 
+                         emotion_tracker.get('disgust', 0))
+
+    play_again_button = pygame.Rect(SCREEN_WIDTH/2 - 150, SCREEN_HEIGHT * 3 / 4 - 25, 120, 50)
+    exit_button = pygame.Rect(SCREEN_WIDTH/2 + 30, SCREEN_HEIGHT * 3 / 4 - 25, 120, 50)
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: pygame.quit(); sys.exit()
+        screen.fill(BLACK)
+        draw_text(screen, "GAME OVER", 64, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 5)
+        if new_high_score: draw_text(screen, "New High Score!", 26, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 3, GREEN)
+        
+        
+        draw_text(screen, f"Your Score: {score}", 28, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 50)
+        draw_text(screen, f"High Score: {high_score}", 22, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 15)
+
+        
+        draw_text(screen, "Emotion Summary:", 22, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 40)
+        draw_text(screen, f"Happy moments: {happy_count}", 20, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 70, (173, 216, 230)) 
+        draw_text(screen, f"Frustrated moments: {frustration_count}", 20, SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 95, (255, 182, 193)) 
+
+        if create_button(screen, play_again_button, "Play Again", BLACK, GREEN, (144, 238, 144)): return
+        if create_button(screen, exit_button, "Exit", WHITE, RED, (255, 105, 97)): pygame.quit(); sys.exit()
+        pygame.display.flip()
+
+
+def game_loop(screen, clock):
+    all_sprites = pygame.sprite.Group()
+    enemies = pygame.sprite.Group()
+    player = Player(speed=7) 
+    all_sprites.add(player)
+    
+    score = 0
+    enemy_timer = 0
+    
+    
+    emotion_tracker = {
+        'happy': 0, 'angry': 0, 'sad': 0, 
+        'fear': 0, 'disgust': 0
+    }
+
+    
+    difficulty_level = 2 
+    difficulty_change_timer = 0
+    difficulty_change_interval = 15 
+
+    running = True
+    while running:
+        clock.tick(60)
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: running = False
+
+        
+        difficulty_change_timer += 1
+        if difficulty_change_timer >= difficulty_change_interval:
+            difficulty_change_timer = 0
+            
+            
+            if current_emotion in emotion_tracker:
+                emotion_tracker[current_emotion] += 1
+
+            
+            if current_emotion == "happy":
+                difficulty_level = min(difficulty_level + 1, MAX_DIFFICULTY_LEVEL)
+            
+            elif current_emotion in ["angry", "sad", "fear", "disgust"]:
+                difficulty_level = max(difficulty_level - 1, 0)
+            
+        
+        current_settings = DIFFICULTY_LEVELS[difficulty_level]
+
+        
+        enemy_timer += 1
+        if enemy_timer >= current_settings['spawn_rate']:
+            enemy_timer = 0
+            new_enemy = Enemy(current_settings['enemy_min_speed'], current_settings['enemy_max_speed'])
+            all_sprites.add(new_enemy)
+            enemies.add(new_enemy)
+            
+        all_sprites.update()
+        
+        if pygame.sprite.spritecollide(player, enemies, False):
+            running = False 
+            
+        score += 1
+
+        
+        screen.fill(BLACK)
+        all_sprites.draw(screen)
+        
+        
+        draw_text(screen, f"Score: {score}", 24, SCREEN_WIDTH / 2, 10)
+        
+        
+        if webcam_frame is not None:
+            webcam_surface = pygame.surfarray.make_surface(webcam_frame.swapaxes(0, 1))
+            screen.blit(webcam_surface, (SCREEN_WIDTH - WEBCAM_VIEW_SIZE[0] - 10, 10))
+            pygame.draw.rect(screen, WHITE, (SCREEN_WIDTH - WEBCAM_VIEW_SIZE[0] - 10, 10, WEBCAM_VIEW_SIZE[0], WEBCAM_VIEW_SIZE[1]), 2)
+            
+        pygame.display.flip()
+        
+    return score, emotion_tracker
+
+
+def main():
+    global stop_thread
+    pygame.init()
+    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    pygame.display.set_caption("Falling Skies - Dynamic Edition")
+    clock = pygame.time.Clock()
+
+    
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("Error: Could not open webcam.")
+        return
+
+    
+    analysis_thread = threading.Thread(target=emotion_analysis_thread, args=(cap,), daemon=True)
+    analysis_thread.start()
+
+    try:
+        while True:
+            show_menu(screen)
+            score, emotion_tracker = game_loop(screen, clock)
+            show_game_over_screen(screen, score, emotion_tracker)
+    finally:
+        
+        stop_thread = True
+        analysis_thread.join(timeout=3)
+        cap.release()
+        pygame.quit()
+        sys.exit()
+
+if __name__ == '__main__':
+    main()
+
