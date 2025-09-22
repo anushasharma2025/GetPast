@@ -80,7 +80,7 @@ DIFFICULTY_LEVELS = [
     {'level': 1, 'enemy_min_speed': 5, 'enemy_max_speed': 9, 'spawn_rate': 28},
     {'level': 2, 'enemy_min_speed': 6, 'enemy_max_speed': 11, 'spawn_rate': 24}, 
     {'level': 3, 'enemy_min_speed': 7, 'enemy_max_speed': 13, 'spawn_rate': 20},
-    {'level': 4, 'enemy_min_speed': 8, 'enemy_max_speed': 16, 'spawn_rate': 16}, 
+    {'level': 4, 'enemy_min_speed': 8, 'enemy_max_speed': 16, 'spawn_rate': 16}, ]
 MAX_DIFFICULTY_LEVEL = len(DIFFICULTY_LEVELS) - 1
 
 
