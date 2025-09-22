@@ -22,6 +22,9 @@ BLACK = (0, 0, 0)
 GREEN = (0, 255, 0)
 RED = (255, 0, 0)
 BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
+DARK_YELLOW = (255, 200, 0)
+BROWN = (139, 69, 19)
 
 
 MODE_NORMAL = "normal"
@@ -45,9 +48,7 @@ mode_change_timer_player2 = None
 
 
 def emotion_analysis_thread(cap):
-    """
-    Analyzes webcam frames in a separate thread.
-    """
+    
     global current_emotion_player1, current_emotion_player2, webcam_frame_player1, webcam_frame_player2, stop_thread
     
     while not stop_thread:
@@ -59,14 +60,14 @@ def emotion_analysis_thread(cap):
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
         try:
-            # Get dimensions to split the frame
+            
             h, w, _ = rgb_frame.shape
             
-            # Split the frame for each player's analysis
+            
             left_half_analysis = rgb_frame[:, :w//2]
             right_half_analysis = rgb_frame[:, w//2:]
             
-            # Analyze emotion for player 1 (left half)
+            
             analysis1 = DeepFace.analyze(
                 left_half_analysis, 
                 actions=['emotion'], 
@@ -75,7 +76,7 @@ def emotion_analysis_thread(cap):
             )
             current_emotion_player1 = analysis1[0]['dominant_emotion'] if isinstance(analysis1, list) and len(analysis1) > 0 else "no face"
 
-            # Analyze emotion for player 2 (right half)
+            
             analysis2 = DeepFace.analyze(
                 right_half_analysis, 
                 actions=['emotion'], 
@@ -88,11 +89,11 @@ def emotion_analysis_thread(cap):
             current_emotion_player1 = "no face"
             current_emotion_player2 = "no face"
 
-        # Prepare frames for display
+        
         frame = cv2.flip(frame, 1)
         h, w, _ = frame.shape
         
-        # Split the live frame for display
+        
         display_frame_player1 = cv2.resize(frame[:, w//2:], WEBCAM_VIEW_SIZE)
         display_frame_player2 = cv2.resize(frame[:, :w//2], WEBCAM_VIEW_SIZE)
         
@@ -108,7 +109,7 @@ class Catcher(pygame.sprite.Sprite):
         self.mode = mode
         self.player_id = player_id
         self.image = pygame.Surface([CATCHER_WIDTH, CATCHER_HEIGHT])
-        self.image.fill(WHITE)
+        self.image.fill(BROWN)
         self.speed = 10
         
         if self.mode == MODE_NORMAL:
@@ -135,7 +136,7 @@ class Catcher(pygame.sprite.Sprite):
             if self.mode == MODE_NORMAL or self.mode == MODE_TOP_DOWN:
                 if keys[pygame.K_a] and self.rect.left > 0:
                     self.rect.x -= self.speed
-                if keys[pygame.K_d] and self.rect.right < SCREEN_WIDTH / 2: # Restricted to left half
+                if keys[pygame.K_d] and self.rect.right < SCREEN_WIDTH / 2: 
                     self.rect.x += self.speed
             elif self.mode == MODE_SIDE_TO_SIDE:
                 if keys[pygame.K_w] and self.rect.top > 0:
@@ -145,7 +146,7 @@ class Catcher(pygame.sprite.Sprite):
         
         elif self.player_id == 2:
             if self.mode == MODE_NORMAL or self.mode == MODE_TOP_DOWN:
-                if keys[pygame.K_LEFT] and self.rect.left > SCREEN_WIDTH / 2: # Restricted to right half
+                if keys[pygame.K_LEFT] and self.rect.left > SCREEN_WIDTH / 2: 
                     self.rect.x -= self.speed
                 if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:
                     self.rect.x += self.speed
@@ -166,12 +167,12 @@ class Catcher(pygame.sprite.Sprite):
         if self.mode == MODE_SIDE_TO_SIDE:
             if self.rect.height != new_dim:
                 self.image = pygame.Surface([CATCHER_HEIGHT, new_dim])
-                self.image.fill(WHITE)
+                self.image.fill(BROWN)
                 self.rect = self.image.get_rect(centery=self.rect.centery, left=self.rect.left)
         else:
             if self.rect.width != new_dim:
                 self.image = pygame.Surface([new_dim, CATCHER_HEIGHT])
-                self.image.fill(WHITE)
+                self.image.fill(BROWN)
                 self.rect = self.image.get_rect(centerx=self.rect.centerx, bottom=self.rect.bottom)
 
 
@@ -196,7 +197,7 @@ class FallingObject(pygame.sprite.Sprite):
         
         self.speed = speed
         
-        # Determine horizontal spawn range based on player side
+        
         if player_side == 1:
             x_range = (0, SCREEN_WIDTH / 2)
         else:
@@ -208,11 +209,11 @@ class FallingObject(pygame.sprite.Sprite):
             self.rect = self.image.get_rect(centerx=random.randint(int(x_range[0]) + OBJECT_SIZE, int(x_range[1]) - OBJECT_SIZE), bottom=SCREEN_HEIGHT)
         elif self.mode == MODE_SIDE_TO_SIDE:
             if player_side == 1:
-                # Always from the right for player 1, moving left
+                
                 self.rect = self.image.get_rect(centery=random.randint(OBJECT_SIZE, SCREEN_HEIGHT - OBJECT_SIZE), right=SCREEN_WIDTH / 2)
                 self.speed = -self.speed
             else:
-                # Always from the left for player 2, moving right
+                
                 self.rect = self.image.get_rect(centery=random.randint(OBJECT_SIZE, SCREEN_HEIGHT - OBJECT_SIZE), left=SCREEN_WIDTH / 2)
 
 
@@ -349,7 +350,7 @@ def game_loop_multiplayer(screen, clock):
             return score1, score2
             
         if not player_1_is_out:
-            # Player 1 mode change logic
+            
             if current_emotion_player1 == "happy":
                 if game_mode_player1 == MODE_NORMAL:
                     if happy_start_time_player1 is None:
@@ -365,7 +366,7 @@ def game_loop_multiplayer(screen, clock):
             else:
                 happy_start_time_player1 = None
             
-            # Revert to normal after 7 seconds
+            
             if game_mode_player1 != MODE_NORMAL and mode_change_timer_player1 is not None:
                 if time.time() - mode_change_timer_player1 > 7:
                     game_mode_player1 = MODE_NORMAL
@@ -375,7 +376,7 @@ def game_loop_multiplayer(screen, clock):
                     mode_change_timer_player1 = None
 
         if not player_2_is_out:
-            # Player 2 mode change logic
+            
             if current_emotion_player2 == "happy":
                 if game_mode_player2 == MODE_NORMAL:
                     if happy_start_time_player2 is None:
@@ -391,7 +392,7 @@ def game_loop_multiplayer(screen, clock):
             else:
                 happy_start_time_player2 = None
                 
-            # Revert to normal after 7 seconds
+            
             if game_mode_player2 != MODE_NORMAL and mode_change_timer_player2 is not None:
                 if time.time() - mode_change_timer_player2 > 7:
                     game_mode_player2 = MODE_NORMAL
@@ -406,7 +407,7 @@ def game_loop_multiplayer(screen, clock):
             obj_type_to_spawn = random.choices(["smile", "frown"], weights=[0.6, 0.4], k=1)[0]
             object_speed = random.randint(4, 8)
             
-            # Spawn objects for each player separately
+            
             if not player_1_is_out:
                 new_obj_p1 = FallingObject(obj_type_to_spawn, game_mode_player1, object_speed, 1)
                 all_sprites.add(new_obj_p1)
@@ -439,14 +440,15 @@ def game_loop_multiplayer(screen, clock):
                     player_2_is_out = True
                     all_sprites.remove(player2)
         
-        screen.fill(BLACK)
+        pygame.draw.rect(screen, YELLOW, (0, 0, SCREEN_WIDTH // 2, SCREEN_HEIGHT))
+        pygame.draw.rect(screen, DARK_YELLOW, (SCREEN_WIDTH // 2, 0, SCREEN_WIDTH // 2, SCREEN_HEIGHT))
+
         
-        # Draw the dividing line
         pygame.draw.line(screen, WHITE, (SCREEN_WIDTH / 2, 0), (SCREEN_WIDTH / 2, SCREEN_HEIGHT), 2)
         
         all_sprites.draw(screen)
         
-        # Display scores or "OUT" message
+        
         if not player_1_is_out:
             draw_text(screen, f"Player 1 Score: {score1}", 24, SCREEN_WIDTH / 4, 10)
         else:
